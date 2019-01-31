@@ -993,31 +993,17 @@ get.qol(qol.improvements=seq(1,1.05, 0.01))
 get.QALYs.costs(wtp=20000)
 
 
-
-
-
+# example plot
 # qol improvements 
-a %>% 
+QALYs.costs %>% 
   ungroup() %>% 
   filter(revision.reduction==1) %>% 
   mutate(qol.improvement.name=qol.improvement-1) %>% 
-  ggplot(aes(x=qol.improvement.name, 
-             group=as.character(age)))+
-  geom_line(aes(y=mean.inc.nmb, colour=as.character(age)))+
-  geom_ribbon(aes(ymin=low.ci.inc.nmb,
-                  ymax=high.ci.inc.nmb,
-                  fill=as.character(age)),
-              alpha=0.1)
-#+
- # facet_grid(.~group)
-
-QALYs.costs %>% 
-  filter(qol.improvement==1) %>% 
-  mutate(revision.reduction.name=1-revision.reduction) %>% 
-  ggplot(aes(x=revision.reduction.name))+
+  ggplot(aes(x=qol.improvement.name))+
   geom_line(aes(y=mean.inc.nmb))+
   geom_ribbon(aes(ymin=low.ci.inc.nmb,
                   ymax=high.ci.inc.nmb),
               alpha=0.1)
-
 # 6) save -----
+save("markov.trace",
+ file="C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/model output/average.characteristics.markov.trace.RData")

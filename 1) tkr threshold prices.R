@@ -1,24 +1,5 @@
 rm(list=ls())
 
-# TO DO-----
-
- # turn modelling code into functions
-     # 1) tps
-     # 2) costs
-     # 3) qol
-       # 4) run model: calls 1-3 and extracts key outputs
-
-
-# transitions
-   # need to expand to full model
-   # with revised state
-   # and transitions from revision and revised to death
-
-
-# --------
-
-
-
 #### SET UP ######
 # Packages ------
 library(dplyr)
@@ -26,7 +7,7 @@ library(survHE)
 library(ggplot2)
 library(cowplot)
 library(scales)
-library(mice)
+#library(mice)
 library(survival)
 library(flexsurv)
 library(rms)
@@ -69,10 +50,41 @@ life.table<-life.table %>%
          Female=female)
 
 
+# average characteristics
+Mode <- function(x, na.rm = T) {
+  if(na.rm){
+    x = x[!is.na(x)]
+  }
+  
+  ux <- unique(x)
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+
+
+tkr.average.characteristics<-cprd_patients %>% 
+  filter(tkr.1==1) %>% 
+  summarise(median_tkr_age=round(median(tkr.1.age, na.rm=T)),
+            mode_tkr_diagnosis=as.character(Mode(diagnosis_knee)),
+            mode_tkr_gender=as.character(Mode(gender)),
+            mode_tkr_IMD_2004_quintiles=as.character(Mode(IMD_2004_quintiles)),
+            mode_tkr_RCS=as.character(Mode(tkr.1.RCS.charlson.full)),
+            median_tkr_BMI=round(median(tkr.1.BMI, na.rm=T)),
+            mode_tkr_smoke=as.character(Mode(tkr.1.smoke)),
+            median_tkr_q1_eq5d=median(tkr.1.q1_eq5d_index, na.rm=T),
+            median_tkr_year=median(tkr.1.year, na.rm=T))
+
+median_tkr_age<-tkr.average.characteristics$median_tkr_age
+mode_tkr_diagnosis<-tkr.average.characteristics$mode_tkr_diagnosis
+mode_tkr_gender<-tkr.average.characteristics$mode_tkr_gender
+mode_tkr_IMD_2004_quintiles<-tkr.average.characteristics$mode_tkr_IMD_2004_quintiles
+mode_tkr_RCS<-tkr.average.characteristics$mode_tkr_RCS
+mode_tkr_smoke<-tkr.average.characteristics$mode_tkr_smoke
+median_tkr_BMI<-tkr.average.characteristics$median_tkr_BMI
+median_tkr_q1_eq5d<-tkr.average.characteristics$median_tkr_q1_eq5d
+median_tkr_year<-tkr.average.characteristics$median_tkr_year
 
 
 
-#### AVERAGE CHARACTERISTICS ------
 # Functions -----
 
 
@@ -588,13 +600,13 @@ m<-ols(tkr.1.q2_eq5d_index ~ diagnosis +
     IMD_2004_quintiles + rcs(tkr.1.q1_eq5d_index, 3) + tkr.1.BMI + 
     tkr.1.smoke,
     x=TRUE, y=TRUE,
-    data=complete(tkr.proms.imp, 1)) #1st mi dataset
+    data=mice::complete(tkr.proms.imp, 1)) #1st mi dataset
 
 # bootstrapped
 set.seed(5)
 m.bstrap<-list()
 for(i in 1:n.sim) {
-using.data<-complete(tkr.proms.imp, 1)
+using.data<-mice::complete(tkr.proms.imp, 1)
 
 sample<-using.data[sample(seq(length(using.data$diagnosis)),
                                           replace=TRUE) ,]
@@ -901,50 +913,71 @@ QALYs.costs<-
            mean.inc.nmb, low.ci.inc.nmb, high.ci.inc.nmb,
            threshold.price)
 
+
+
+# add prop revised
+prop_revised<-
+  proportion.tkr_revision %>%
+  filter(sim=="deterministic") %>%
+  group_by(group,
+           revision.reduction) %>%
+  summarise(mean.prop.revised=mean(prop.revised)) %>%
+  left_join(
+  proportion.tkr_revision %>%
+  filter(sim!="deterministic") %>%
+  group_by(group,
+           revision.reduction) %>%
+  summarise(low.ci.prop.revised=quantile(prop.revised,
+                      probs = c(0.025), na.rm=TRUE),
+            high.ci.prop.revised=quantile(prop.revised,
+                      probs = c(0.975), na.rm=TRUE)),
+  by=c("group", "revision.reduction"))
+    
+QALYs.costs<-QALYs.costs %>% 
+  left_join(prop_revised,
+            by=c("group", "revision.reduction"))
+
+# add estimated qol if unrevised
+qol.improvement<-markov.trace %>%
+  filter(sim=="deterministic") %>% 
+  filter(time==0) %>%
+  group_by(group,
+           qol.improvement) %>%
+  summarise(mean.unrevised.qol=mean(unrevised.qol)) %>%
+  left_join(
+markov.trace %>%
+  filter(sim!="deterministic") %>% 
+  filter(time==0) %>%
+  group_by(group,
+           qol.improvement) %>%
+  summarise(low.ci.unrevised.qol=quantile(unrevised.qol,
+                      probs = c(0.025), na.rm=TRUE),
+            high.ci.unrevised.qol=quantile(unrevised.qol,
+                      probs = c(0.975), na.rm=TRUE)),
+  by=c("group", "qol.improvement"))
+
+
+
+QALYs.costs<-QALYs.costs %>% 
+  left_join(qol.improvement,
+            by=c("group", "qol.improvement"))
+
+
 # add characteristics
 QALYs.costs<-QALYs.costs %>% 
   left_join(characteristics,
             by="group")
 
+
+
+
+
+
 QALYs.costs<<-QALYs.costs}
 
 
 # AVERAGE CHARACTERISTICS -----
-# run model
 # 1) patient profiles -----
-
-Mode <- function(x, na.rm = T) {
-  if(na.rm){
-    x = x[!is.na(x)]
-  }
-  
-  ux <- unique(x)
-  return(ux[which.max(tabulate(match(x, ux)))])
-}
-
-
-tkr.average.characteristics<-cprd_patients %>% 
-  filter(tkr.1==1) %>% 
-  summarise(median_tkr_age=round(median(tkr.1.age, na.rm=T)),
-            mode_tkr_diagnosis=as.character(Mode(diagnosis_knee)),
-            mode_tkr_gender=as.character(Mode(gender)),
-            mode_tkr_IMD_2004_quintiles=as.character(Mode(IMD_2004_quintiles)),
-            mode_tkr_RCS=as.character(Mode(tkr.1.RCS.charlson.full)),
-            median_tkr_BMI=round(median(tkr.1.BMI, na.rm=T)),
-            mode_tkr_smoke=as.character(Mode(tkr.1.smoke)),
-            median_tkr_q1_eq5d=median(tkr.1.q1_eq5d_index, na.rm=T),
-            median_tkr_year=median(tkr.1.year, na.rm=T))
-
-median_tkr_age<-tkr.average.characteristics$median_tkr_age
-mode_tkr_diagnosis<-tkr.average.characteristics$mode_tkr_diagnosis
-mode_tkr_gender<-tkr.average.characteristics$mode_tkr_gender
-mode_tkr_IMD_2004_quintiles<-tkr.average.characteristics$mode_tkr_IMD_2004_quintiles
-mode_tkr_RCS<-tkr.average.characteristics$mode_tkr_RCS
-mode_tkr_smoke<-tkr.average.characteristics$mode_tkr_smoke
-median_tkr_BMI<-tkr.average.characteristics$median_tkr_BMI
-median_tkr_q1_eq5d<-tkr.average.characteristics$median_tkr_q1_eq5d
-median_tkr_year<-tkr.average.characteristics$median_tkr_year
-
  characteristics<-
   rbind(
   expand.grid(age=median_tkr_age, #c(60,70),
@@ -972,10 +1005,10 @@ characteristics$smoke<-as.character(characteristics$smoke)
 # 2) get transitions -------
 # with all relative risk reductions
 get.transitions(patient.profiles=characteristics,
-                revision.reductions=seq(0, 1, by=0.1),#seq(0, 1, by=0.025),
+                revision.reductions=seq(0, 1, by=0.025),#seq(0, 1, by=0.025),
                  # relative reduction in risk of revision
                  # 0: no reduction
-                n.sim=8)#100)
+                n.sim=15)
 
 a<- markov.trace %>%
   mutate(check=tkr+tkr_revision+revised+death)
@@ -987,12 +1020,13 @@ get.costs()
 
 # 4) get qol -----
 # with all relative improvements
-get.qol(qol.improvements=seq(1,1.05, 0.01))
+get.qol(qol.improvements=seq(1,1.05, 0.0025))
 # 5) summarise results -----
 # and net benefit and incremental net benefit
 get.QALYs.costs(wtp=20000)
 
 
+    
 # example plot
 # qol improvements 
 QALYs.costs %>% 
@@ -1005,5 +1039,76 @@ QALYs.costs %>%
                   ymax=high.ci.inc.nmb),
               alpha=0.1)
 # 6) save -----
-save("markov.trace",
- file="C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/model output/average.characteristics.markov.trace.RData")
+save("QALYs.costs",
+ file="C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/model output/tkr.average.characteristics.QALYs.costs.RData")
+
+# AGE AND GENDER ------
+# 1) patient profiles -----
+
+ characteristics<-
+  rbind(
+  expand.grid(age=seq(50,80, by=5),
+              gender=c("Male", "Female"),
+              diagnosis=mode_tkr_diagnosis,
+              IMD=as.character(mode_tkr_IMD_2004_quintiles),
+              RCS=mode_tkr_RCS,
+              BMI=median_tkr_BMI,
+              smoke=mode_tkr_smoke,
+              q1_eq5d=median_tkr_q1_eq5d,
+              year=median_tkr_year))
+
+
+characteristics$group<-seq(1, length(characteristics$age))
+
+characteristics$diagnosis<-as.character(characteristics$diagnosis)
+characteristics$gender<-as.character(characteristics$gender)
+characteristics$RCS<-as.character(characteristics$RCS)
+characteristics$IMD<-as.character(characteristics$IMD)
+characteristics$smoke<-as.character(characteristics$smoke)
+
+
+
+
+
+# 2) get transitions -------
+# with all relative risk reductions
+get.transitions(patient.profiles=characteristics,
+                revision.reductions=seq(0, 1, by=0.025),#seq(0, 1, by=0.025),
+                 # relative reduction in risk of revision
+                 # 0: no reduction
+                n.sim=15)
+
+# a<- markov.trace %>%
+#   mutate(check=tkr+tkr_revision+revised+death)
+# table(a$check)
+# rm(a)
+
+# 3) get costs -----
+get.costs()
+
+# 4) get qol -----
+# with all relative improvements
+get.qol(qol.improvements=seq(1,1.05, 0.0025))
+# 5) summarise results -----
+# and net benefit and incremental net benefit
+get.QALYs.costs(wtp=20000)
+
+
+# example plot
+# qol improvements 
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1) %>% 
+  mutate(qol.improvement.name=qol.improvement-1) %>% 
+  ggplot(aes(x=qol.improvement.name, group=group))+
+  geom_line(aes(y=mean.inc.nmb,
+                colour=group))+
+  geom_ribbon(aes(ymin=low.ci.inc.nmb,
+                  ymax=high.ci.inc.nmb,
+                  fill=group),
+              alpha=0.1)
+
+# 6) save -----
+save("QALYs.costs",
+ file="C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/model output/tkr.age.gender.QALYs.costs.RData")
+

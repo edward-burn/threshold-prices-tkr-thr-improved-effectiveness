@@ -43,11 +43,11 @@ load("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/costs and los/reference c
 
 
 
-# ## uk life tables 
-# life.table<-read.csv("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/diagnosis replacement and mortality/uk life table.csv")
-# life.table<-life.table %>% 
-#   rename(Male=male,
-#          Female=female)
+## uk life tables 
+life.table<-read.csv("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/diagnosis replacement and mortality/uk life table.csv")
+life.table<-life.table %>% 
+  rename(Male=male,
+         Female=female)
 
 
 # average characteristics
@@ -124,7 +124,6 @@ sims <- normboot.flexsurvreg(model,
             newdata = patient.profile)
 prob<-NULL
 # model is flexsurv
-if(any(grepl("spline", model$call))==T){
 for (using.time in 0:tail(times,1)){
 prob<-rbind(prob,
            data.frame(time=using.time,
@@ -132,19 +131,7 @@ prob<-rbind(prob,
                   gamma = sims, 
                   knots = model$knots,
                   lower.tail = FALSE),
-           sim=1:n.sim)) }}
-
-#model is gompertz
-if(any(grepl("gompertz", model$call))==T){
-for (using.time in 0:tail(times,1)){
-prob<-rbind(prob,
-            data.frame(time=using.time,
-           surv=pgompertz(using.time,  
-                  shape = sims[,1], 
-                  rate = sims[,2],
-                  lower.tail = FALSE),
-           sim=1:n.sim))}}
-
+           sim=1:n.sim)) }
 #to transition probabilities
 prob<-prob %>% 
   group_by(sim) %>% 
@@ -203,69 +190,45 @@ tkr.to.death.tps<-
            n.sim=n.sim)
 tkr.to.death.tps<-tkr.to.death.tps %>% 
   mutate(group=!!using.group)
-# subsequent years will be based on 
-# diagnosis to mortality model
+# subsequent years will be based on lifetables
+# add lifetables for subsequent mortality
+using.lifetable<-life.table %>% 
+  select(age,
+         !!(as.character(
+           patient.profiles$gender[using.group]))) %>% 
+  rename(tp=
+           !!(as.character(
+           patient.profiles$gender[using.group])))
 
-tkr.to.death.tps2<-
-      get.tps(
-           model = mi.models.diagnosis.to.death[[1]],
-           times= seq(0,50),#t=0 is age 60 
-           patient.profile=
-             data.frame(#age=characteristics$age, #nb not used for calculation
-                        diagnosis_knee=
-                          patient.profiles$diagnosis[
-                            patient.profiles$group==using.group], 
-                        gender=
-                          patient.profiles$gender[
-                                 patient.profiles$group==using.group],
-                        charlson=
-                          patient.profiles$RCS[
-                                        patient.profiles$group==using.group], 
-                        IMD=patient.profiles$IMD[
-                                        patient.profiles$group==using.group], 
-                        bmi_diagnosis_knee=patient.profiles$BMI[
-                                        patient.profiles$group==using.group], 
-                        smoke_diagnosis_knee=patient.profiles$smoke[
-                                        patient.profiles$group==using.group]),
-           n.sim=n.sim)
+using.lifetable<-using.lifetable %>% 
+    filter(age>!!start.age+10)
 
+# add to prevoious 10 years 
+# duplicate for deterministic and 
+# each simulation
+using.lifetable<-using.lifetable %>% 
+  mutate(time=age-!!start.age)
 
-tkr.to.death.tps2<-tkr.to.death.tps2 %>% 
-  mutate(group=!!using.group)
-tkr.to.death.tps2<-tkr.to.death.tps2 %>% 
-  left_join(characteristics, by=c("group"))
+using.lifetable<-using.lifetable %>% 
+  mutate(surv=NA) %>% 
+  select(time, surv, tp)
 
+using.lifetable<- 
+  cbind(
+       using.lifetable[rep(1:nrow(using.lifetable),
+                       times = n.sim+1),],
+   rbind(data.frame(sim=rep("deterministic", 
+                         length(using.lifetable[,1]))),
+      data.frame(sim=as.character(rep(1:n.sim,
+                         length(using.lifetable[,1])))) %>% 
+      arrange(sim)))
 
-# combine mortality for each group 
-# want first ten years from tkr mortality
-# then want next ten years- choice of 'time' depends on starting age
-# eg for 70 year old we want from time 20 onwards (e.g. from age 80....)
+using.lifetable$group<-using.group
 
-tkr.to.death.tps2$surv.age<-tkr.to.death.tps2$time+59
-tkr.to.death.tps2$t.x<-(tkr.to.death.tps2$surv.age)-
-        tkr.to.death.tps2$age
-# want from t.x=11
-tkr.to.death.tps2<-tkr.to.death.tps2 %>% 
-             filter(t.x>=11)
-tkr.to.death.tps2<-tkr.to.death.tps2 %>% 
-             mutate(time=t.x) %>% 
-             select(-c(surv.age,t.x))
-# now t for diagnosis_mortality is time since op, 
-# starting from 11 years post-op
-
-# up to age 99
-tkr.to.death.tps2$working.age<-tkr.to.death.tps2$age+(tkr.to.death.tps2$time-1)
-tkr.to.death.tps2<-tkr.to.death.tps2 %>% 
-  filter(working.age<100) %>% 
-  select(-working.age)
-
-
-# combine risks of death
-tkr.to.death.tps<-tkr.to.death.tps %>% 
-  rbind(tkr.to.death.tps2 %>% 
-        select(time, surv, tp, sim, group))
-tkr.to.death.tps<-tkr.to.death.tps %>% arrange(group)
-rm(tkr.to.death.tps2)
+tkr.to.death.tps<-
+  rbind(tkr.to.death.tps,
+    using.lifetable) %>%  
+  arrange(sim, time)
 
 working.tps<-
   rbind(
@@ -1147,5 +1110,4 @@ QALYs.costs %>%
 
 # 6) save -----
 save("QALYs.costs",
- file="C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/model output/tkr.age.gender.QALYs.costs.RData")
-
+file="C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/model output/tkr.age.gender.QALYs.costs.RData")

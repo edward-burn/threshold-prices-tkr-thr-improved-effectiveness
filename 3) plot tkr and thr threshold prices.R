@@ -538,7 +538,7 @@ QALYs.costs %>%
 
 # revision reduction -----
 QALYs.costs %>% 
-  filter(revision.reduction==1) %>% 
+  filter(qol.improvement==1) %>% 
   filter(age==55| age==65 |age==75) %>% 
   mutate(age=as.character(age)) %>% 
   mutate(revision.reduction.name=1-revision.reduction) %>% 
@@ -552,7 +552,7 @@ QALYs.costs %>%
   geom_ribbon(aes(ymin=low.ci.inc.nmb,
                   ymax=high.ci.inc.nmb),
               alpha=0.1)+
-  scale_linetype_manual(values=c("solid", "longdash"))+
+  scale_linetype_manual(values=c("solid", "longdash", "dotted"))+
   ylab("Threshold price (\u00A3)")+
   xlab("Relative reduction in risk of revision (%)")+
   scale_x_continuous(labels=percent)+

@@ -32,19 +32,18 @@ load(file = "Y:/PROMs/models/tkr_prom_model.bstrap.RData")
 
 #cost models
 #tkr
-load("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/costs and los/reference cost models/mi models tkr costs.RData")
-tkr.cost.mi.model<-each.tkr.mi.model
-rm(each.tkr.mi.model)
+load("Y:/reference cost models/first mi model tkr costs.RData")
 # bootstrapped 
 # (for first mi dataset only!)
-load("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/costs and los/reference cost models/tkr.cost.model.bstrap.mi_1.RData")
-
+#load("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/costs and los/reference cost models/tkr.cost.model.bstrap.mi_1.RData")
+load("Y:/reference cost models/tkr.cost.model.bstrap.mi_1.RData")
 
 #tkr_revision
 load("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/costs and los/reference cost models/tkr_revision.cost.model.RData")
-
 # bstrapped
 load("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/costs and los/reference cost models/tkr_revision.cost.model.bstrap.RData")
+# save(thr.cost.model.bstrap.mi_1, 
+#      file = "Y:/reference cost models/thr.cost.model.bstrap.mi_1.RData")
 
 
 
@@ -930,7 +929,7 @@ run.model<-function(){
                       #tkr cost
                       df$tkr.cost<-NA
                       if(df$sim[1]=="deterministic"){
-                        df$tkr.cost<-exp(predict(tkr.cost.mi.model[[1]],
+                        df$tkr.cost<-exp(predict(tkr.cost.mi.model,
                                                  df %>% 
                                                    mutate(diagnosis=
                                                             ifelse(diagnosis=="k_ost",

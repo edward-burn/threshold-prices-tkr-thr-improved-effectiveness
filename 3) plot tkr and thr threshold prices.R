@@ -3,6 +3,7 @@ rm(list=ls())
 library(dplyr)
 library(ggplot2)
 library(scales)
+library(cowplot)
 
 #1 for average characteristics -----
 # data -----
@@ -25,9 +26,121 @@ QALYs.costs<-rbind(tkr.QALYs.costs %>%
 
 
 
+# specific estimates -----
+#lifetime risk of revision
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+           qol.improvement==1 ) %>%
+  mutate(est=paste0(sprintf("%.2f",mean.prop.revised*100),
+                    "% (",
+                    sprintf("%.2f",low.ci.prop.revised*100),
+                    "% to ",
+                    sprintf("%.2f",high.ci.prop.revised*100),
+                    "%)")) %>% 
+  select(op, est)
+
+#qalys
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+           qol.improvement==1 ) %>%
+  select(op,QALYs)
+
+
+#qalys
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+           qol.improvement==1 ) %>%
+  select(op,Costs)
+
+#5% improvement in qol
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+           qol.improvement==1.05 ) %>%
+  select(op,QALYs)
+# threshold price 
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+           qol.improvement==1.05 ) %>%
+  mutate(est=threshold.price) %>% 
+  select(op, est)
+
+# 50% reducion in revision
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5 &
+           qol.improvement==1 ) %>%
+  select(op,QALYs)
+#cost
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5 &
+           qol.improvement==1 ) %>%
+  select(op,Costs)
+# threshold price
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5 &
+           qol.improvement==1 ) %>%
+  mutate(est=threshold.price) %>% 
+  select(op, est)
+
+
+#5% improvement in qol, and
+# 50% reducion in revision
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5 &
+           qol.improvement==1.05 ) %>%
+  select(op,QALYs)
+#cost
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5 &
+           qol.improvement==1.05 ) %>%
+  select(op,Costs)
+# threshold price
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5 &
+           qol.improvement==1.05 ) %>%
+  mutate(est=threshold.price) %>% 
+  select(op, est)
+
+
+# lifetime risk of revision estimate ------
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+          qol.improvement==1 ) %>% 
+  select(op, mean.prop.revised,
+         low.ci.prop.revised,
+         high.ci.prop.revised)
 # heatmap -----
 # shows the mean threshold price
 # for combined improvements in revision risk and qol
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1) %>% 
+  filter(qol.improvement==1.05) %>% 
+  select(op,threshold.price)
+
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5) %>% 
+  filter(qol.improvement==1) %>% 
+  select(op,threshold.price)
+
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5) %>% 
+  filter(qol.improvement==1.05) %>% 
+  select(op,threshold.price)
+
 QALYs.costs %>% 
   arrange(desc(revision.reduction),qol.improvement) %>% 
   ggplot()+
@@ -44,9 +157,36 @@ QALYs.costs %>%
   scale_y_continuous(labels=percent)+
   facet_grid(. ~ op)
 
-# ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/average.characteristics.heatmap.tiff",
-#          dpi=300,
-#              width = 12, height = 7)
+
+#colour
+QALYs.costs %>% 
+  # filter(revision.reduction %in% seq(0,1, 0.25)) %>% # less granular
+  # filter(qol.improvement %in% seq(1,1.05, 0.015)) %>% # less granular
+  filter(revision.reduction>=0.5) %>%  #up to a 50% reduction
+  arrange(desc(revision.reduction),qol.improvement) %>% 
+  ggplot()+
+  geom_tile(aes(x=abs(revision.reduction-1),
+                y=qol.improvement-1,
+                fill=mean.inc.nmb)) +
+  # scale_x_reverse()+
+  xlab("Relative reduction in revision risk")+
+  ylab("Relative improvement\nin quality of life if unrevised")+
+  labs(fill = "Threshold price (\u00A3)")+
+  #scale_fill_gradient(low = "white", high = "black")+ 
+  scale_fill_gradientn(colours = 
+                         c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#F21A00"))+
+  theme_bw(base_size = 24)+ 
+  scale_x_continuous(labels = scales::percent_format(accuracy = 1),
+                     expand=c(0,0))+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     expand=c(0,0))+
+  facet_grid(. ~ op)+theme(panel.spacing = unit(2, "lines"))
+
+
+ ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/average.characteristics.heatmap.tiff",
+          dpi=300,
+              width = 14, height = 6)
+ 
 # qol improvements -----
 QALYs.costs %>% 
   filter(revision.reduction==1) %>% 
@@ -59,17 +199,18 @@ QALYs.costs %>%
   scale_linetype_manual(values=c("solid", "longdash"))+
   ylab("Threshold price (\u00A3)")+
   xlab("Relative improvement in quality of life if unrevised")+
-  scale_x_continuous(labels=percent)+
-  theme_bw(base_size = 18)+ 
+   scale_x_continuous(labels = scales::percent_format(accuracy = 1))+
+   theme_bw(base_size = 24)+ 
   theme(legend.title=element_blank())+
   facet_grid(. ~ op)
 
-# ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/average.characteristics.qol.improvement.tiff",
-#          dpi=300,
-#              width = 12, height = 7)
+ ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/average.characteristics.qol.improvement.tiff",
+          dpi=300,
+              width = 12, height = 7)
 
 # revision reduction -----
 QALYs.costs %>% 
+   filter(revision.reduction>=0.5) %>%  #up to a 50% reduction
   filter(qol.improvement==1) %>% 
   mutate(revision.reduction.name=1-revision.reduction) %>% 
   ggplot(aes(x=revision.reduction.name))+
@@ -80,14 +221,14 @@ QALYs.costs %>%
   scale_linetype_manual(values=c("solid", "longdash"))+
   ylab("Threshold price (\u00A3)")+
   xlab("Relative reduction in risk of revision (%)")+
-  scale_x_continuous(labels=percent)+
- theme_bw(base_size = 18)+ 
+   scale_x_continuous(labels = scales::percent_format(accuracy = 1))+
+   theme_bw(base_size = 24)+ 
   theme(legend.title=element_blank())+
   facet_grid(. ~ op)
 
-# ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/average.characteristics.revision.reduction.tiff",
-#          dpi=300,
-#              width = 12, height = 7)
+ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/average.characteristics.revision.reduction.tiff",
+          dpi=300,
+              width = 12, height = 7)
 
 
 # # absolute risk 
@@ -138,7 +279,48 @@ QALYs.costs %>%
 #   facet_grid(. ~ op)
 
 
+# together -----
+plot_grid(
+  QALYs.costs %>% 
+    filter(revision.reduction>=0.5) %>%  #up to a 50% reduction
+    filter(qol.improvement==1) %>% 
+    mutate(revision.reduction.name=1-revision.reduction) %>% 
+    ggplot(aes(x=revision.reduction.name))+
+    geom_line(aes(y=mean.inc.nmb))+
+    geom_ribbon(aes(ymin=low.ci.inc.nmb,
+                    ymax=high.ci.inc.nmb),
+                alpha=0.1)+
+    scale_linetype_manual(values=c("solid", "longdash"))+
+    scale_y_continuous(limits = c(0,11750))+
+    ylab("Threshold price (\u00A3)")+
+    xlab("Relative reduction in risk of revision (%)")+
+    scale_x_continuous(labels = scales::percent_format(accuracy = 1))+
+    theme_bw(base_size = 24)+ 
+    theme(legend.title=element_blank())+
+    facet_grid(. ~ op)+ ggtitle("a) Improvements in risk of revision"),
+  
+  QALYs.costs %>% 
+    filter(revision.reduction==1) %>% 
+    mutate(qol.improvement.name=qol.improvement-1) %>% 
+    ggplot(aes(x=qol.improvement.name))+
+    geom_line(aes(y=mean.inc.nmb))+
+    geom_ribbon(aes(ymin=low.ci.inc.nmb,
+                    ymax=high.ci.inc.nmb),
+                alpha=0.1)+
+    scale_linetype_manual(values=c("solid", "longdash"))+
+    scale_y_continuous(limits = c(0,11750))+
+    ylab("Threshold price (\u00A3)")+
+    xlab("Relative improvement in quality of life if unrevised")+
+    scale_x_continuous(labels = scales::percent_format(accuracy = 1))+
+    theme_bw(base_size = 24)+ 
+    theme(legend.title=element_blank())+
+    facet_grid(. ~ op)+ ggtitle("b) Improvements in quality of life if unrevised ")
+  , nrow=2
+)
 
+ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/average.characteristics.revision.reduction.and.qol.tiff",
+       dpi=300,
+       width = 12, height = 14)
 
 
 #2 Age and gender -----
@@ -249,7 +431,7 @@ a %>%
               alpha=0.1)+
   scale_linetype_manual(name = "Post-operative \nquality of life",
                         values=c("solid", "longdash"))+
-  ylab("EQ-5D over year of primary surgery (if unrevised)")+
+  ylab("EQ-5D-3L over year of primary surgery (if unrevised)")+
   xlab("Time (months)")+
   scale_x_continuous(limits = c(0, 12),
                    breaks= c(0,3,6,9,12))+
@@ -272,6 +454,7 @@ ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr th
 # shows the mean threshold price
 # for combined improvements in revision risk and qol
 QALYs.costs %>% 
+  filter(revision.reduction>=0.5) %>%  #up to a 50% reduction
   filter(age==50| age==65| age==80) %>% 
  # filter(gender=="Female") %>% 
   arrange(desc(revision.reduction),qol.improvement) %>% 
@@ -283,10 +466,13 @@ QALYs.costs %>%
   xlab("Relative reduction in revision risk")+
   ylab("Relative improvement in quality of life if unrevised")+
   labs(fill = "Threshold \nprice (\u00A3)")+
-  scale_fill_gradient(low = "white", high = "black")+
+  scale_fill_gradientn(colours = 
+                         c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#F21A00"))+
   theme_bw(base_size = 18)+ 
-  scale_x_continuous(labels=percent)+
-  scale_y_continuous(labels=percent)+
+  scale_x_continuous(labels = scales::percent_format(accuracy = 1),
+                     expand=c(0,0))+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     expand=c(0,0))+
   facet_grid(age+gender ~ op)
 
 ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/age.gender.heatmap.tiff",
@@ -295,6 +481,40 @@ ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr th
 
 
 # qol improvements -----
+QALYs.costs %>% 
+  filter(revision.reduction==1) %>% 
+  filter(age==55| age==65 |age==75) %>% 
+  mutate(age=as.character(age)) %>% 
+ # filter(gender=="Female") %>% 
+  mutate(qol.improvement.name=qol.improvement-1) %>% 
+  ggplot(aes(x=qol.improvement.name, 
+             group=age,
+             #colour=age,
+             #fill=age,
+             linetype=age))+
+    facet_grid(gender ~ op)+
+  #facet_grid(age+gender ~ op)+
+  geom_line(aes(y=mean.inc.nmb))+
+  geom_ribbon(aes(ymin=low.ci.inc.nmb,
+                  ymax=high.ci.inc.nmb),
+              alpha=0.1)+
+ # scale_linetype_manual(values=c("solid", "longdash"))+
+  ylab("Threshold price (\u00A3)")+
+  xlab("Relative improvement in quality of life if unrevised")+
+  scale_x_continuous(labels=percent)+
+  theme_bw(base_size = 18)+ 
+  theme(legend.title=element_blank())
+
+ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/age.gender.qol.improvement.tiff",
+         dpi=300,
+         width = 12, height = 7)
+
+
+
+
+# age and qol improvements -----
+
+
 QALYs.costs %>% 
   filter(revision.reduction==1) %>% 
   filter(qol.improvement==1.05) %>% 
@@ -317,6 +537,57 @@ QALYs.costs %>%
 
 
 # revision reduction -----
+QALYs.costs %>% 
+  filter(revision.reduction==1) %>% 
+  filter(age==55| age==65 |age==75) %>% 
+  mutate(age=as.character(age)) %>% 
+  mutate(revision.reduction.name=1-revision.reduction) %>% 
+  ggplot(aes(x=revision.reduction.name, 
+             group=age,
+             #colour=age,
+             #fill=age,
+             linetype=age))+
+    facet_grid(gender ~ op)+
+  geom_line(aes(y=mean.inc.nmb))+
+  geom_ribbon(aes(ymin=low.ci.inc.nmb,
+                  ymax=high.ci.inc.nmb),
+              alpha=0.1)+
+  scale_linetype_manual(values=c("solid", "longdash"))+
+  ylab("Threshold price (\u00A3)")+
+  xlab("Relative reduction in risk of revision (%)")+
+  scale_x_continuous(labels=percent)+
+ theme_bw(base_size = 18)+ 
+  theme(legend.title=element_blank())
+
+ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/age.gender.revision.reduction.tiff",
+         dpi=300,
+         width = 12, height = 7)
+
+
+
+QALYs.costs %>% 
+  filter(qol.improvement==1) %>% 
+    filter(age==55| age==65 |age==75) %>% 
+  mutate(revision.reduction.name=1-revision.reduction) %>% 
+    mutate(age=as.character(age)) %>% 
+  ggplot(aes(x=revision.reduction.name,
+             group=age,
+             linetype=age))+
+  geom_line(aes(y=mean.inc.nmb))+
+  geom_ribbon(aes(ymin=low.ci.inc.nmb,
+                  ymax=high.ci.inc.nmb),
+              alpha=0.1)+
+ # scale_linetype_manual(values=c("solid", "longdash"))+
+  ylab("Threshold price (\u00A3)")+
+  xlab("Relative reduction in risk of revision (%)")+
+  scale_x_continuous(labels=percent)+
+ theme_bw(base_size = 18)+ 
+  theme(legend.title=element_blank())+
+  facet_grid(gender ~ op)
+
+
+# age and revision reduction -----
+
 QALYs.costs %>% 
   filter(revision.reduction==0.5) %>% 
   filter(qol.improvement==1) %>% 
@@ -380,3 +651,77 @@ rbind(QALYs.costs %>%
   
 ggsave("C:/Users/Ed/Dropbox/DPhil data cprd hes analysis/threshold prices tkr thr improved effectiveness/plots/age.gender.revision.reduction.50percent.qol.5percent.tiff",
          dpi=300,width = 12, height = 7)
+
+# specific estimates -----
+
+# all for 65 year old woman
+# lifetime risk
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+          qol.improvement==1 ) %>%
+  filter(age=="65", gender=="Female") %>% 
+  mutate(est=paste0(sprintf("%.2f",mean.prop.revised*100),
+                    "% (",
+                   sprintf("%.2f",low.ci.prop.revised*100),
+                   "% to ",
+                   sprintf("%.2f",high.ci.prop.revised*100),
+                   "%)")) %>% 
+    select(op, est)
+
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+          qol.improvement==1 ) %>%
+  filter(age=="50", gender=="Female") %>% 
+  mutate(est=paste0(sprintf("%.2f",mean.prop.revised*100),
+                    "% (",
+                   sprintf("%.2f",low.ci.prop.revised*100),
+                   "% to ",
+                   sprintf("%.2f",high.ci.prop.revised*100),
+                   "%)")) %>% 
+    select(op, est)
+
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+          qol.improvement==1 ) %>%
+  filter(age=="65", gender=="Female") %>% 
+  mutate(est=paste0(sprintf("%.2f",mean.unrevised.qol),
+                    " (",
+                   sprintf("%.2f",low.ci.unrevised.qol),
+                   " to ",
+                   sprintf("%.2f",high.ci.unrevised.qol),
+                   ")")) %>% 
+    select(op, est)
+
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+          qol.improvement==1.05 ) %>%
+  filter(age=="65", gender=="Female") %>% 
+  mutate(est=paste0(sprintf("%.2f",mean.unrevised.qol),
+                    " (",
+                   sprintf("%.2f",low.ci.unrevised.qol),
+                   " to ",
+                   sprintf("%.2f",high.ci.unrevised.qol),
+                   ")")) %>% 
+    select(op, est)
+
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==0.5 &
+          qol.improvement==1 ) %>%
+  filter(age=="50"| age=="65"|age=="80") %>% 
+  filter(gender=="Female") %>% 
+  mutate(est=threshold.price) %>% 
+    select(op, age,est)
+
+QALYs.costs %>% 
+  ungroup() %>% 
+  filter(revision.reduction==1 &
+          qol.improvement==1.05 ) %>%
+  filter(age=="50"| age=="65"|age=="80") %>% 
+  filter(gender=="Female") %>% 
+  mutate(est=threshold.price) %>% 
+    select(op, age,est)

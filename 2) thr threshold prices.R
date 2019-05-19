@@ -19,8 +19,12 @@ library(parallel)
 load("Y:/CPRD for analysis.RData")
 # for average characteristics
 
-load("Y:/multiple imputated data hip/models.RData")
+
+#transition probabilities
 # models (for each mi dataset) 
+load("Y:/cprd hes/working data/thr.to.revision_model.RData")
+load("Y:/cprd hes/working data/thr.to.death_model.RData")
+
 
 #load("Y:/proms with MI.RData")
 load(file = "Y:/PROMs/models/thr_prom_model.RData")
@@ -54,6 +58,8 @@ life.table<-life.table %>%
   rename(Male=male,
          Female=female)
 
+load(file="Y:/CPRD HES/working data/thr_cohort.average.characteristics.RData")
+thr.average.characteristics.risks<-thr_cohort.average.characteristics
 
 # average characteristics
 Mode <- function(x, na.rm = T) {
@@ -93,7 +99,7 @@ median_thr_year<-thr.average.characteristics$median_thr_year
 
 
 # n.sim ----
-n.sim<-15#000#0#6#40
+n.sim<-1000
 
 
 
@@ -135,7 +141,7 @@ run.model<-function(){
   # for revision for each profile
   get.det.surv.revision<-function(df){
     
-    det.tps<-summary(mi.models.thr_revision[[1]], #1st MI
+    det.tps<-summary(mi.models.thr.to.revision[[1]], #1st MI
                      t = times, 
                      ci=F,
                      newdata = df)
@@ -295,7 +301,7 @@ run.model<-function(){
   
   ## probabilistic tps revision 
   sims.revision <- normboot.flexsurvreg(
-    mi.models.thr_revision[[1]], 
+    mi.models.thr.to.revision[[1]], 
     B=n.sim, 
     newdata = newdata)
   
@@ -310,7 +316,7 @@ run.model<-function(){
                              data.frame(time=using.time,
                                         surv=psurvspline(using.time,  
                                                          gamma = sims.revision, 
-                                                         knots = mi.models.thr_revision[[1]]$knots,
+                                                         knots = mi.models.thr.to.revision[[1]]$knots,
                                                          lower.tail = FALSE),
                                         sim=1:n.sim,
                                         group=using.group))}}}
@@ -323,7 +329,7 @@ run.model<-function(){
                              data.frame(time=using.time,
                                         surv=psurvspline(using.time,  
                                                          gamma = sims.revision[[using.group]], 
-                                                         knots = mi.models.thr_revision[[1]]$knots,
+                                                         knots = mi.models.thr.to.revision[[1]]$knots,
                                                          lower.tail = FALSE),
                                         sim=1:n.sim,
                                         group=using.group))}}}
@@ -481,8 +487,8 @@ run.model<-function(){
                 df<-df %>% 
                   select(time,sim,group,         
                          p.mortality,age, gender,diagnosis, 
-                         IMD, RCS, BMI, smoke, q1_eq5d,
-                         year,working.age)
+                         IMD, RCS,charlson, BMI, smoke, smoking_status, q1_eq5d,
+                         year,age.centered, BMI.centered,working.age)
                 df
               })
   
@@ -624,7 +630,7 @@ run.model<-function(){
                    function(df) {
                      
                      # cycles
-                     number.cycles <- 100-  min(df$age)
+                     number.cycles <- 99-  min(df$age)
                      
                      
                      m.TR <- matrix(NA, 
@@ -638,7 +644,7 @@ run.model<-function(){
                      thr_revision.count<-NULL
                      
                      
-                     for(t in 1:nrow(df)) {
+                     for(t in 1:number.cycles) {   
                        m.P.t <- rbind(c(1-df$p.revision[t]-
                                           df$p.mortality[t],   # unrevised-> unrevised
                                         df$p.revision[t],   # unrevised->revision 
@@ -727,7 +733,7 @@ run.model<-function(){
   print("Adding qol improvements")
   start<-Sys.time()
   
-  qol.improvements<-seq(1,1.05, 0.0025) 
+  qol.improvements<-seq(1,1.05, 0.005) 
   
   
   # add markov traces qol with improvements
@@ -1253,6 +1259,21 @@ run.model<-function(){
     left_join(qol.improvement,
               by=c("group", "qol.improvement"))
   
+  # translate eq5d to oks/ohs
+  coef.okhs<- 0.0222
+  cons.okhs<-	-0.0697
+  # Based on Dakin et al 2012 - OKS to EQ-5D calculator
+  # paper: https://www.ncbi.nlm.nih.gov/pubmed/22555470
+  # AND
+  
+  # paper Mapping the Oxford hip score onto the EQ-5D utility index
+  # https://link.springer.com/article/10.1007%2Fs11136-012-0174-y
+  
+  
+  
+  QALYs.costs$okhs<-(QALYs.costs$mean.unrevised.qol-cons.okhs)/coef.okhs
+  
+  
   
   # add characteristics
   QALYs.costs<-QALYs.costs %>% 
@@ -1281,10 +1302,18 @@ characteristics<-
                 diagnosis=mode_thr_diagnosis,
                 IMD=as.character(mode_thr_IMD_2004_quintiles),
                 RCS=mode_thr_RCS,
+                charlson=thr.average.characteristics.risks$mode_charlson,
                 BMI=median_thr_BMI,
                 smoke=mode_thr_smoke,
+                smoking_status=thr.average.characteristics.risks$mode_smoking_status,
                 q1_eq5d=median_thr_q1_eq5d,
                 year=median_thr_year))
+
+characteristics<-characteristics%>% 
+  mutate(age.centered=age-median_thr_age,
+         BMI.centered=BMI-median_thr_BMI)
+
+#thr.average.characteristics.risks$mode_smoking_status
 
 characteristics$group<-seq(1, length(characteristics$age))
 
@@ -1319,10 +1348,18 @@ characteristics<-
                 diagnosis=mode_thr_diagnosis,
                 IMD=as.character(mode_thr_IMD_2004_quintiles),
                 RCS=mode_thr_RCS,
+                charlson=thr.average.characteristics.risks$mode_charlson,
                 BMI=median_thr_BMI,
                 smoke=mode_thr_smoke,
+                smoking_status=thr.average.characteristics.risks$mode_smoking_status,
                 q1_eq5d=median_thr_q1_eq5d,
                 year=median_thr_year))
+
+characteristics<-characteristics%>% 
+  mutate(age.centered=age-median_thr_age,
+         BMI.centered=BMI-median_thr_BMI)
+
+#thr.average.characteristics.risks$mode_smoking_status
 
 characteristics$group<-seq(1, length(characteristics$age))
 
@@ -1331,6 +1368,7 @@ characteristics$gender<-as.character(characteristics$gender)
 characteristics$RCS<-as.character(characteristics$RCS)
 characteristics$IMD<-as.character(characteristics$IMD)
 characteristics$smoke<-as.character(characteristics$smoke)
+
 
 
 
